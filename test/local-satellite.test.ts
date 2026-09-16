@@ -144,9 +144,23 @@ describe("buildLocalSatelliteEnv", () => {
     expect(on.AWAKE_WAV).toBeUndefined();
   });
 
-  it("sets PULSE_SERVER in pulse-socket mode", () => {
+  it("routes default devices through the pulse socket in pulse-socket mode", () => {
     const env = buildLocalSatelliteEnv(inputs({ audioMode: "pulse-socket" }));
+    expect(env.MIC_DEVICE).toBe("pulse");
+    expect(env.SND_DEVICE).toBe("pulse");
     expect(env.PULSE_SERVER).toBe("unix:///run/pulse-socket");
+  });
+
+  it("preserves explicit device overrides in pulse-socket mode", () => {
+    const env = buildLocalSatelliteEnv(
+      inputs({
+        audioMode: "pulse-socket",
+        micDevice: "none",
+        sndDevice: "plughw:CARD=Device,DEV=0",
+      }),
+    );
+    expect(env.MIC_DEVICE).toBe("none");
+    expect(env.SND_DEVICE).toBe("plughw:CARD=Device,DEV=0");
   });
 });
 
@@ -237,6 +251,9 @@ describe("buildLocalSatelliteConfig", () => {
     expect(config.volumes).toEqual({
       "/run/pulse-socket": "/run/user/1000/pulse/native",
     });
+    const forward = config as { devices?: string[]; groupAdd?: string[] };
+    expect(forward.devices).toBeUndefined();
+    expect(forward.groupAdd).toBeUndefined();
   });
 
   it("enables digest tracking so 'auto' → latest follows releases", () => {
