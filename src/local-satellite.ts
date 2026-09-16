@@ -73,8 +73,16 @@ export function buildLocalSatelliteEnv(
 ): Record<string, string> {
   const { local, advanced, wakeUri } = inputs;
   const env: Record<string, string> = {};
-  if (local.micDevice !== "auto") env.MIC_DEVICE = local.micDevice;
-  if (local.sndDevice !== "auto") env.SND_DEVICE = local.sndDevice;
+  if (local.micDevice !== "auto") {
+    env.MIC_DEVICE = local.micDevice;
+  } else if (local.audioMode === "pulse-socket") {
+    env.MIC_DEVICE = "pulse";
+  }
+  if (local.sndDevice !== "auto") {
+    env.SND_DEVICE = local.sndDevice;
+  } else if (local.audioMode === "pulse-socket") {
+    env.SND_DEVICE = "pulse";
+  }
   if (wakeUri !== null && local.wakeWords.length > 0) {
     env.WAKE_URI = containerWakeUri(wakeUri);
     env.WAKE_WORD_NAME = local.wakeWords.join(" ");
@@ -166,16 +174,18 @@ export function buildLocalSatelliteConfig(
   if (local.audioMode === "pulse-socket") {
     config.volumes = { [PULSE_SOCKET_CONTAINER_PATH]: local.hostPulseSocket };
   }
-  // Audio-device fields: applied by signalk-container > 1.23.2 (which
-  // emits the /dev/snd bind even from inside a container — well-known
-  // device dirs are trusted optimistically); silently dropped by 1.23.2
-  // and older (no drift loops).
-  const forward = config as ContainerConfig & {
-    devices?: string[];
-    groupAdd?: string[];
-  };
-  forward.devices = ["/dev/snd"];
-  forward.groupAdd = ["audio"];
+  if (local.audioMode === "alsa") {
+    // Audio-device fields: applied by signalk-container > 1.23.2 (which
+    // emits the /dev/snd bind even from inside a container — well-known
+    // device dirs are trusted optimistically); silently dropped by 1.23.2
+    // and older (no drift loops).
+    const forward = config as ContainerConfig & {
+      devices?: string[];
+      groupAdd?: string[];
+    };
+    forward.devices = ["/dev/snd"];
+    forward.groupAdd = ["audio"];
+  }
   return config;
 }
 
