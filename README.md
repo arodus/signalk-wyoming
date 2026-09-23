@@ -72,7 +72,8 @@ The recommended first install needs zero microphones:
 
 1. Install **signalk-container** (and configure its runtime), then
    **signalk-piper** and **signalk-wyoming** from the Signal K App Store.
-   Enable all of them.
+   Enable all of them. Piper is optional when you only need notification
+   sounds; it is required for spoken text.
 2. signalk-piper starts the Piper container; the first start downloads the
    voice (~60 MB — its plugin status shows progress). This plugin discovers
    it automatically — nothing to configure.
@@ -163,6 +164,29 @@ bypasses mute — use it for alarms. Normal announcements queue per satellite
 and respect the `voice.muted` switch. Failures are loud: if nothing could
 be played you get an error back, never a silent drop.
 
+For delivery-aware integrations, use the generic announcement API instead
+of `say()`. It accepts either speech or a notification sound and keeps a
+per-satellite lifecycle (`queued`, `playing`, `played`, `suppressed`,
+`cancelled`, `interrupted`, `failed`, or `unknown`):
+
+```bash
+curl -X POST http://localhost:3000/plugins/signalk-wyoming/api/announcements \
+  -H 'Content-Type: application/json' \
+  -d '{"requestId":"anchor-42","content":{"kind":"sound","soundId":"alarm"},"priority":"urgent"}'
+```
+
+`requestId` is an optional idempotency key: retrying the same request returns
+the original announcement without playing it twice. Reusing it for different
+content is rejected. The built-in sound IDs are `chime`, `warning`, and
+`alarm`; custom uncompressed PCM WAV files can be uploaded through
+`POST /api/sounds` and are stored in Signal K's data directory.
+
+`played` means the satellite software sent Wyoming's `played`
+acknowledgement after accepting the complete audio stream. A timeout or lost
+connection is reported as `unknown`, never assumed successful. This proves
+delivery to the satellite process; the Wyoming protocol cannot prove that an
+amplifier or physical speaker was audible.
+
 ### Voice commands
 
 Say a wake word, speak, pause. The transcribed utterance is published as
@@ -195,6 +219,12 @@ admin-only).
 | Method & path                                      | Body / result                                                                                                            |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `POST /api/say`                                    | `{text, targets?, voice?, priority?}` → `200` `{ok, queued, errors?, suppressed?}`; `503` when nothing could be queued   |
+| `POST /api/announcements`                          | speech or sound request with optional `requestId`, targets and priority → tracked snapshot                               |
+| `GET /api/announcements/:id`                       | current aggregate and per-satellite delivery state                                                                       |
+| `DELETE /api/announcements/:id`                    | cancel queued or in-progress playback                                                                                    |
+| `GET /api/sounds`                                  | built-in and uploaded sound metadata                                                                                     |
+| `POST /api/sounds`                                 | `{id, wavBase64}` uploads a bounded PCM WAV                                                                              |
+| `DELETE /api/sounds/:id`                           | delete an uploaded sound; built-ins are read-only                                                                        |
 | `GET /api/satellites`                              | `[{id, name, connected, state, host, port, hasControlApi, queueDepth}]`                                                  |
 | `GET /api/services`                                | `{asr, tts, wake}` → each `{uri, status, source, plugin?}`; `wake` gains `models` (available wake-word names) when ready |
 | `GET /api/voices`                                  | piper voices `[{name, languages, description}]`; `503` until TTS is available                                            |

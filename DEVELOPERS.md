@@ -14,7 +14,9 @@ full architecture (topology, pipeline flows, concurrency rules) is
 | `src/config.ts`               | Config parse/validate + the JSON-schema fallback for the plugin config UI                            |
 | `src/api.ts`                  | The REST contract (`registerApiRoutes`) — every route in one place                                   |
 | `src/pipeline.ts`             | Wake → ASR pipeline engine (`voice.command` publication)                                             |
-| `src/queue.ts` / `src/say.ts` | Per-satellite announcement queues and the say() rules (priorities, mute, targets)                    |
+| `src/announcements.ts`        | Generic speech/sound requests, idempotency, delivery state, wait/cancel and lifecycle events         |
+| `src/queue.ts` / `src/say.ts` | Per-satellite queues and the backwards-compatible say() contract                                     |
+| `src/sounds.ts`               | Built-in sounds and bounded persistent PCM WAV library                                               |
 | `src/satellite.ts`            | Remote satellite client (claim-aware reconnect, keepalive)                                           |
 | `src/local-satellite.ts`      | Local satellite `ManagedContainer` + image version fetching                                          |
 | `src/discovery.ts`            | `wyoming-service` PropertyValues discovery (spec §3.1)                                               |
@@ -82,6 +84,47 @@ Semantics (all three surfaces): the promise resolves on enqueue, never on
 playback; partial failure resolves with `ok: false` + per-satellite
 `errors`; text is capped at 500 characters; `wait: true` is reserved for
 v1.x and rejects loudly.
+
+## The delivery-aware announcement API
+
+New integrations should subscribe to the separate
+`signalk-wyoming.announcements.api` PropertyValue. It does not change the
+version-1 `say()` contract:
+
+```js
+app.onPropertyValues("signalk-wyoming.announcements.api", (values) => {
+  const api = values.at(-1)?.value;
+  if (!api) return;
+
+  api
+    .announce({
+      requestId: "anchor-alarm-42", // stable across retries
+      content: { kind: "sound", soundId: "alarm" },
+      targets: ["cockpit"],
+      priority: "urgent",
+    })
+    .then(async ({ id }) => {
+      const terminal = await api.waitForAnnouncement(id, {
+        timeoutMs: 30000,
+      });
+      // Inspect terminal.targets.cockpit.state before acknowledging upstream.
+    });
+});
+```
+
+The version-1 object contains `announce`, `getAnnouncement`,
+`waitForAnnouncement`, `cancelAnnouncement`, and `onAnnouncementEvent`.
+Speech requires a discovered TTS service; sounds go straight to the satellite
+and therefore work without Piper. Completed request IDs/results are retained
+in a bounded, time-limited in-memory store so a retry does not duplicate
+playback.
+
+The orchestrator promotes a target to `played` only after the satellite sends
+the standard Wyoming `played` event. If confirmation never arrives it closes
+that satellite connection (preventing a late, uncorrelated event from
+acknowledging the next stream) and records `unknown`. This is application-level
+proof from the satellite process, not proof that physical sound left the
+speaker.
 
 ## Config panel build
 

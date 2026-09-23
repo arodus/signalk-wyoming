@@ -451,20 +451,20 @@ describe("RemoteSatellite play()", () => {
     const playPromise = sat.play(pcm(100)); // 1 s of audio
     await server.waitForEvent((e) => e.event.type === "audio-chunk");
     sat.cancelPlayback();
-    await playPromise; // resolves promptly, without waiting for played
+    await playPromise; // resolves after the satellite acknowledges audio-stop
     await server.waitForEvent((e) => e.event.type === "audio-stop");
     const chunks = server.log.filter((e) => e.event.type === "audio-chunk");
     expect(chunks.length).toBeLessThan(100);
     expect(sat.state).toBe("idle");
   });
 
-  it("resolves via fallback timeout when played never arrives", async () => {
+  it("rejects when played never arrives", async () => {
     const server = await startSatelliteServer({ playedDelayMs: 60_000 });
     const { sat } = makeSat(server, {}, { playedGraceMs: 80 });
     sat.connect();
     await until(() => sat.connected);
     const startedAt = Date.now();
-    await sat.play(pcm(2)); // 20 ms audio + 80 ms grace
+    await expect(sat.play(pcm(2))).rejects.toThrow(/confirm playback/);
     expect(Date.now() - startedAt).toBeLessThan(2000);
   });
 

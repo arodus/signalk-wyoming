@@ -1,3 +1,20 @@
+# Unreleased
+
+## Added
+
+- Delivery-aware speech and notification-sound announcements with
+  per-satellite lifecycle state, waiting, cancellation, lifecycle events, and
+  bounded idempotency keys.
+- Built-in notification sounds plus persistent custom PCM WAV upload and
+  deletion APIs. Sound playback does not require Piper.
+
+## Changed
+
+- Satellite playback succeeds only after a Wyoming `played` acknowledgement.
+  Missing confirmation now produces an `unknown` result and resets the
+  connection instead of treating elapsed time as proof.
+- The existing version-1 `say()` API remains enqueue-based and compatible.
+
 # v0.2.1
 
 Nothing to reconfigure. The one behavior change: with the local satellite's

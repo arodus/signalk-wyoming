@@ -22,9 +22,10 @@
  *   and takes the reconnect path.
  * - play(): frames BufferedAudio as audio-start/chunk/stop, paced at
  *   real-time rate (~4 chunks of lead, never firehosing minutes of audio into
- *   socket buffers); resolves on `played` (v1.4.1+) or a fallback timeout of
- *   audio duration + 5s. Cancellation stops sending chunks but still sends
- *   audio-stop.
+ *   socket buffers); resolves only on `played` (v1.4.1+). Missing proof is a
+ *   failure and resets the connection before another stream can start.
+ *   Cancellation stops sending chunks, sends audio-stop, and waits for that
+ *   stream's acknowledgement.
  *
  * No pipeline logic here — pipeline lives in wave G's engine.
  */
@@ -125,6 +126,7 @@ interface PlaySession {
   /** Wakes a pacing sleep early on cancel/disconnect. */
   interrupt: (() => void) | null;
   playedResolve: (() => void) | null;
+  playedReceived: boolean;
   disconnected: boolean;
 }
 
@@ -229,8 +231,8 @@ export class RemoteSatellite {
 
   /**
    * Frame and send BufferedAudio as a Wyoming audio stream, paced at
-   * real-time rate. Resolves when `played` arrives or after audio duration +
-   * grace. Rejects if not connected or the connection drops mid-play.
+   * real-time rate. Resolves only when `played` arrives. Rejects if that
+   * acknowledgement is missing, if not connected, or if the connection drops.
    */
   async play(audio: BufferedAudio): Promise<void> {
     if (!this.connected || this.conn === null) {
@@ -243,6 +245,7 @@ export class RemoteSatellite {
       cancelled: false,
       interrupt: null,
       playedResolve: null,
+      playedReceived: false,
       disconnected: false,
     };
     this.play_ = session;
@@ -270,22 +273,19 @@ export class RemoteSatellite {
       }
       // Always close the stream — also on cancellation (drop remainder only).
       this.write(AudioStop());
-      if (!session.cancelled) {
-        await this.awaitPlayed(session, audio, startedAt);
-      }
+      await this.awaitPlayed(session, audio, startedAt);
     } finally {
       this.play_ = null;
       if (this.state === "speaking") this.setState("idle");
     }
   }
 
-  /** Cancel in-flight playback: remaining chunks are dropped (audio-stop still sent). */
+  /** Cancel playback: drop remaining chunks and await audio-stop confirmation. */
   cancelPlayback(): void {
     const session = this.play_;
     if (session === null) return;
     session.cancelled = true;
     session.interrupt?.();
-    session.playedResolve?.();
   }
 
   // ---------------------------------------------------------------------
@@ -418,6 +418,7 @@ export class RemoteSatellite {
       return;
     }
     if (event.type === "played") {
+      if (this.play_ !== null) this.play_.playedReceived = true;
       this.play_?.playedResolve?.();
       this.deps.onEvent(this, { type: "played" });
       return;
@@ -555,13 +556,19 @@ export class RemoteSatellite {
     startedAt: number,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (session.playedReceived) {
+        resolve();
+        return;
+      }
       const graceMs = this.deps.playedGraceMs ?? 5000;
       const deadline = startedAt + bufferedAudioDurationMs(audio) + graceMs;
       const timer = this.timers.setTimeout(
         () => {
-          // Fallback: older/foreign satellites never send `played`.
+          // Elapsed time is not proof. Reset before another stream so a late,
+          // uncorrelated `played` cannot complete the next announcement.
           session.playedResolve = null;
-          resolve();
+          reject(new Error("satellite did not confirm playback with played"));
+          this.conn?.close();
         },
         Math.max(0, deadline - this.now()),
       );
