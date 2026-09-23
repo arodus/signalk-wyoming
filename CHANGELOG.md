@@ -1,4 +1,4 @@
-# Unreleased
+# v0.3.0-beta.0
 
 ## Added
 
@@ -14,6 +14,8 @@
   Missing confirmation now produces an `unknown` result and resets the
   connection instead of treating elapsed time as proof.
 - The existing version-1 `say()` API remains enqueue-based and compatible.
+- Pulse-socket mode now selects the PulseAudio input/output devices by default
+  and no longer forwards ALSA-only `/dev/snd` access into the container.
 
 # v0.2.1
 
