@@ -87,6 +87,21 @@ v1.x and rejects loudly.
 
 ## The delivery-aware announcement API
 
+### Satellite-local pre-playback contract
+
+When a target has `prePlaybackHook` enabled, its queue sends an empty
+`POST http://<host>:<controlPort>/pre-playback` before emitting `play-start` or
+writing any Wyoming audio. A non-2xx response or request timeout emits
+`play-error`; the announcement service records that satellite as `failed` and
+does not call `RemoteSatellite.play`.
+
+The request deliberately has no body. The companion satellite image owns the
+executable, fixed argument array, per-attempt timeout, retry count/delay, and
+post-success readiness delay. This boundary prevents the unauthenticated LAN
+control API from becoming an arbitrary-command endpoint. The orchestrator
+never reads the response body, so command output or exception details cannot
+enter Signal K events or delivery status.
+
 New integrations should subscribe to the separate
 `signalk-wyoming.announcements.api` PropertyValue. It does not change the
 version-1 `say()` contract:

@@ -162,6 +162,35 @@ describe("buildLocalSatelliteEnv", () => {
     expect(env.MIC_DEVICE).toBe("none");
     expect(env.SND_DEVICE).toBe("plughw:CARD=Device,DEV=0");
   });
+
+  it("passes a fixed pre-playback argv and execution policy", () => {
+    const env = buildLocalSatelliteEnv(
+      inputs({
+        prePlaybackExecutable: "/usr/bin/wake-screen",
+        prePlaybackArgs: ["--display", "0; shutdown"],
+        prePlaybackTimeoutMs: 1200,
+        prePlaybackRetries: 2,
+        prePlaybackRetryDelayMs: 100,
+        prePlaybackReadyDelayMs: 750,
+      }),
+    );
+    expect(env).toMatchObject({
+      PRE_PLAYBACK_EXECUTABLE: "/usr/bin/wake-screen",
+      PRE_PLAYBACK_ARGS_JSON: '["--display","0; shutdown"]',
+      PRE_PLAYBACK_TIMEOUT_MS: "1200",
+      PRE_PLAYBACK_RETRIES: "2",
+      PRE_PLAYBACK_RETRY_DELAY_MS: "100",
+      PRE_PLAYBACK_READY_DELAY_MS: "750",
+    });
+    // Arguments stay array elements; they are never rendered as shell text.
+    expect(JSON.parse(env.PRE_PLAYBACK_ARGS_JSON ?? "[]")).toEqual([
+      "--display",
+      "0; shutdown",
+    ]);
+    expect(
+      buildLocalSatelliteEnv(inputs()).PRE_PLAYBACK_EXECUTABLE,
+    ).toBeUndefined();
+  });
 });
 
 describe("micWithoutWakeWordsWarning", () => {

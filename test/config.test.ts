@@ -18,6 +18,8 @@ describe("parseConfig defaults", () => {
     expect(cfg.localSatellite.feedbackSounds).toBe(true);
     expect(cfg.localSatellite.wakeWords).toEqual([]);
     expect(cfg.localSatellite.tag).toBe("auto");
+    expect(cfg.localSatellite.prePlaybackExecutable).toBe("");
+    expect(cfg.localSatellite.prePlaybackArgs).toEqual([]);
     expect(cfg.services).toEqual({ asr: "auto", tts: "auto", wake: "auto" });
     expect(cfg.defaults).toEqual({ language: "en", voice: "" });
     expect(cfg.advanced).toEqual(DEFAULT_ADVANCED);
@@ -162,6 +164,29 @@ describe("parseConfig satellites", () => {
     ).toThrow(/hasControlApi/);
   });
 
+  it("validates the remote pre-playback hook", () => {
+    expect(() =>
+      parseConfig({
+        satellites: [{ id: "x", host: "h", prePlaybackHook: true }],
+      }),
+    ).toThrow(/requires hasControlApi/);
+    expect(
+      parseConfig({
+        satellites: [
+          {
+            id: "x",
+            host: "h",
+            hasControlApi: true,
+            prePlaybackHook: true,
+          },
+        ],
+      }).satellites[0],
+    ).toMatchObject({
+      prePlaybackHook: true,
+      prePlaybackRequestTimeoutMs: 15000,
+    });
+  });
+
   it("rejects a non-array satellites field", () => {
     expect(() => parseConfig({ satellites: {} })).toThrow(
       /satellites must be an array/,
@@ -231,6 +256,30 @@ describe("parseConfig services / defaults / advanced / localSatellite", () => {
     expect(() => parseConfig({ localSatellite: { autoGain: "loud" } })).toThrow(
       /autoGain/,
     );
+  });
+
+  it("parses and validates local pre-playback command settings", () => {
+    const cfg = parseConfig({
+      localSatellite: {
+        prePlaybackExecutable: "/usr/bin/wake",
+        prePlaybackArgs: ["--display", "0"],
+        prePlaybackTimeoutMs: 1000,
+        prePlaybackRetries: 2,
+        prePlaybackRetryDelayMs: 50,
+        prePlaybackReadyDelayMs: 500,
+      },
+    });
+    expect(cfg.localSatellite).toMatchObject({
+      prePlaybackExecutable: "/usr/bin/wake",
+      prePlaybackArgs: ["--display", "0"],
+      prePlaybackRetries: 2,
+    });
+    expect(() =>
+      parseConfig({ localSatellite: { prePlaybackArgs: "--display" } }),
+    ).toThrow(/prePlaybackArgs/);
+    expect(() =>
+      parseConfig({ localSatellite: { prePlaybackRetries: 6 } }),
+    ).toThrow(/prePlaybackRetries/);
   });
 
   it("defaults the hardware mixer levels to full scale", () => {

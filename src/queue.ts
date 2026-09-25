@@ -34,6 +34,8 @@ export interface AnnouncementQueueEvent {
 }
 
 export interface AnnouncementQueueDeps {
+  /** Complete any satellite-local preparation before playback is reported. */
+  prepare?(item: AnnouncementItem): Promise<void>;
   play(item: AnnouncementItem): Promise<void>;
   /** Cancel the in-flight play (RemoteSatellite.cancelPlayback). */
   cancelPlayback(): void;
@@ -166,8 +168,19 @@ export class AnnouncementQueue {
       while (!this.pipelineActive && this.items.length > 0) {
         const item = this.items.shift() as AnnouncementItem;
         this.current = item;
-        this.deps.onEvent?.({ type: "play-start", item });
         try {
+          await this.deps.prepare?.(item);
+          const interruptedBeforePlayback =
+            this.interruption?.id === item.id ? this.interruption : null;
+          if (interruptedBeforePlayback) {
+            this.deps.onEvent?.({
+              type: "play-interrupted",
+              item,
+              reason: interruptedBeforePlayback.reason,
+            });
+            continue;
+          }
+          this.deps.onEvent?.({ type: "play-start", item });
           await this.deps.play(item);
           const interrupted =
             this.interruption?.id === item.id ? this.interruption : null;

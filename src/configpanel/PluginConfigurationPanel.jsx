@@ -120,6 +120,11 @@ function toSatelliteRow(raw) {
       (sat.controlPort !== undefined && sat.controlPort !== null),
     controlPort:
       typeof sat.controlPort === "number" ? String(sat.controlPort) : "",
+    prePlaybackHook: sat.prePlaybackHook === true,
+    prePlaybackRequestTimeoutMs:
+      typeof sat.prePlaybackRequestTimeoutMs === "number"
+        ? String(sat.prePlaybackRequestTimeoutMs)
+        : "15000",
   };
 }
 
@@ -132,6 +137,8 @@ function emptySatelliteRow() {
     wakeWords: [],
     hasControlApi: false,
     controlPort: "",
+    prePlaybackHook: false,
+    prePlaybackRequestTimeoutMs: "15000",
   };
 }
 
@@ -360,6 +367,32 @@ function SatelliteEditor({ sat, live, knownWords, onChange, onRemove }) {
           </span>
         )}
       </FieldRow>
+      {sat.hasControlApi && (
+        <FieldRow
+          label="Pre-playback hook"
+          hint="wait for this satellite's locally configured wake command before every sound or speech item"
+        >
+          <input
+            style={S.checkbox}
+            type="checkbox"
+            checked={sat.prePlaybackHook}
+            onChange={(e) => set({ prePlaybackHook: e.target.checked })}
+          />
+          {sat.prePlaybackHook && (
+            <input
+              style={{ ...S.input, width: 110 }}
+              type="number"
+              min="100"
+              max="600000"
+              value={sat.prePlaybackRequestTimeoutMs}
+              onChange={(e) =>
+                set({ prePlaybackRequestTimeoutMs: e.target.value })
+              }
+              title="Request timeout in milliseconds"
+            />
+          )}
+        </FieldRow>
+      )}
     </div>
   );
 }
@@ -420,6 +453,17 @@ export default function PluginConfigurationPanel({ configuration, save }) {
       typeof cfgLocal.tag === "string" && cfgLocal.tag !== ""
         ? cfgLocal.tag
         : DEFAULT_LOCAL_SATELLITE.tag,
+    prePlaybackExecutable:
+      typeof cfgLocal.prePlaybackExecutable === "string"
+        ? cfgLocal.prePlaybackExecutable
+        : "",
+    prePlaybackArgs: Array.isArray(cfgLocal.prePlaybackArgs)
+      ? cfgLocal.prePlaybackArgs.join("\n")
+      : "",
+    prePlaybackTimeoutMs: String(cfgLocal.prePlaybackTimeoutMs ?? 5000),
+    prePlaybackRetries: String(cfgLocal.prePlaybackRetries ?? 0),
+    prePlaybackRetryDelayMs: String(cfgLocal.prePlaybackRetryDelayMs ?? 250),
+    prePlaybackReadyDelayMs: String(cfgLocal.prePlaybackReadyDelayMs ?? 0),
   }));
   const [services, setServices] = useState(() => ({
     asr: typeof cfgServices.asr === "string" ? cfgServices.asr : "auto",
@@ -545,6 +589,14 @@ export default function PluginConfigurationPanel({ configuration, save }) {
       ) {
         return `satellite ${label}: control port must be an integer 1-65535`;
       }
+      if (
+        sat.prePlaybackHook &&
+        (!Number.isInteger(Number(sat.prePlaybackRequestTimeoutMs)) ||
+          Number(sat.prePlaybackRequestTimeoutMs) < 100 ||
+          Number(sat.prePlaybackRequestTimeoutMs) > 600000)
+      ) {
+        return `satellite ${label}: pre-playback timeout must be an integer 100-600000`;
+      }
     }
     if (local.enabled && seen.has(LOCAL_SATELLITE_ID)) {
       return `satellite id "${LOCAL_SATELLITE_ID}" is reserved for the local satellite`;
@@ -552,6 +604,18 @@ export default function PluginConfigurationPanel({ configuration, save }) {
     for (const key of ["noiseSuppression", "autoGain", "micVolume"]) {
       if (local[key] !== "" && !Number.isFinite(Number(local[key]))) {
         return `local satellite: ${key} must be a number`;
+      }
+    }
+    const hookRanges = {
+      prePlaybackTimeoutMs: [100, 60000],
+      prePlaybackRetries: [0, 5],
+      prePlaybackRetryDelayMs: [0, 30000],
+      prePlaybackReadyDelayMs: [0, 60000],
+    };
+    for (const [key, [min, max]] of Object.entries(hookRanges)) {
+      const n = Number(local[key]);
+      if (!Number.isInteger(n) || n < min || n > max) {
+        return `local satellite: ${key} must be an integer ${min}-${max}`;
       }
     }
     for (const { key, label } of ADVANCED_FIELDS) {
@@ -581,6 +645,12 @@ export default function PluginConfigurationPanel({ configuration, save }) {
       if (sat.hasControlApi) {
         out.hasControlApi = true;
         out.controlPort = portValue(sat.controlPort, SATELLITE_CONTROL_PORT);
+        if (sat.prePlaybackHook) {
+          out.prePlaybackHook = true;
+          out.prePlaybackRequestTimeoutMs = Number(
+            sat.prePlaybackRequestTimeoutMs,
+          );
+        }
       }
       return out;
     });
@@ -596,6 +666,15 @@ export default function PluginConfigurationPanel({ configuration, save }) {
       sndMixerVolume: local.sndMixerVolume,
       micMixerVolume: local.micMixerVolume,
       tag: local.tag,
+      prePlaybackExecutable: local.prePlaybackExecutable.trim(),
+      prePlaybackArgs: local.prePlaybackArgs
+        .split("\n")
+        .map((arg) => arg.trim())
+        .filter((arg) => arg !== ""),
+      prePlaybackTimeoutMs: Number(local.prePlaybackTimeoutMs),
+      prePlaybackRetries: Number(local.prePlaybackRetries),
+      prePlaybackRetryDelayMs: Number(local.prePlaybackRetryDelayMs),
+      prePlaybackReadyDelayMs: Number(local.prePlaybackReadyDelayMs),
     };
     // Cleared optional numbers are omitted, not sent as empty strings —
     // parseConfig applies image defaults for absent fields.
@@ -868,6 +947,50 @@ export default function PluginConfigurationPanel({ configuration, save }) {
                 }
               />
             </FieldRow>
+          </CollapsibleSection>
+          <CollapsibleSection title="Pre-playback screen wake">
+            <FieldRow
+              label="Executable"
+              hint="absolute executable inside the satellite container; empty disables it; no shell is used"
+            >
+              <input
+                style={{ ...S.input, width: 300 }}
+                value={local.prePlaybackExecutable}
+                onChange={(e) =>
+                  setLocal({
+                    ...local,
+                    prePlaybackExecutable: e.target.value,
+                  })
+                }
+                placeholder="/usr/local/bin/wake-screen"
+              />
+            </FieldRow>
+            <FieldRow label="Arguments" hint="one fixed argument per line">
+              <textarea
+                style={{ ...S.input, width: 300, minHeight: 70 }}
+                value={local.prePlaybackArgs}
+                onChange={(e) =>
+                  setLocal({ ...local, prePlaybackArgs: e.target.value })
+                }
+              />
+            </FieldRow>
+            {[
+              ["prePlaybackTimeoutMs", "Command timeout (ms)"],
+              ["prePlaybackRetries", "Retries"],
+              ["prePlaybackRetryDelayMs", "Retry delay (ms)"],
+              ["prePlaybackReadyDelayMs", "Readiness delay (ms)"],
+            ].map(([key, label]) => (
+              <FieldRow key={key} label={label}>
+                <input
+                  style={{ ...S.input, width: 110 }}
+                  type="number"
+                  value={local[key]}
+                  onChange={(e) =>
+                    setLocal({ ...local, [key]: e.target.value })
+                  }
+                />
+              </FieldRow>
+            ))}
           </CollapsibleSection>
         </>
       )}

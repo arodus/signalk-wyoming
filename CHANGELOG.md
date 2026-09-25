@@ -10,6 +10,9 @@
 - Notification-sound management in the Test webapp, including target
   selection, tracked per-satellite playback results, and custom WAV upload and
   deletion.
+- Optional per-satellite pre-playback hooks for waking a screen before every
+  sound or speech item, with fixed argv, bounded timeout/retries, readiness
+  delay, and delivery-aware failure reporting.
 
 ## Changed
 
