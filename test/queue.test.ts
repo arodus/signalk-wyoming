@@ -52,60 +52,6 @@ function makePlayer() {
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 describe("AnnouncementQueue ordering", () => {
-  it("prepares successfully before reporting or starting playback", async () => {
-    const order: string[] = [];
-    const queue = new AnnouncementQueue({
-      prepare: async () => {
-        order.push("prepare");
-      },
-      play: async () => {
-        order.push("play");
-      },
-      cancelPlayback: vi.fn(),
-      onEvent: (event) => order.push(event.type),
-    });
-    queue.enqueue(item());
-    await vi.waitFor(() => expect(order).toContain("play-end"));
-    expect(order).toEqual(["prepare", "play-start", "play", "play-end"]);
-  });
-
-  it("fails the item without playback when preparation fails", async () => {
-    const play = vi.fn(async () => undefined);
-    const events: string[] = [];
-    const queue = new AnnouncementQueue({
-      prepare: async () => {
-        throw new Error("pre-playback hook failed");
-      },
-      play,
-      cancelPlayback: vi.fn(),
-      onEvent: (event) => events.push(event.type),
-    });
-    queue.enqueue(item());
-    await vi.waitFor(() => expect(events).toContain("play-error"));
-    expect(play).not.toHaveBeenCalled();
-    expect(events).toEqual(["play-error"]);
-  });
-
-  it("does not play an item cancelled while preparation is running", async () => {
-    const preparing = deferred();
-    const play = vi.fn(async () => undefined);
-    const events: string[] = [];
-    const queue = new AnnouncementQueue({
-      prepare: () => preparing.promise,
-      play,
-      cancelPlayback: vi.fn(),
-      onEvent: (event) => events.push(event.type),
-    });
-    const pending = item();
-    queue.enqueue(pending);
-    await tick();
-    expect(queue.cancel(pending.id)).toBe(true);
-    preparing.resolve();
-    await vi.waitFor(() => expect(events).toContain("play-interrupted"));
-    expect(play).not.toHaveBeenCalled();
-    expect(events).toEqual(["play-interrupted"]);
-  });
-
   it("plays items FIFO", async () => {
     const player = makePlayer();
     const queue = new AnnouncementQueue(player);

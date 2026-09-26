@@ -110,38 +110,27 @@ settings form with the same options.
 
 One entry per mic/speaker device on the network:
 
-| Setting                                          | Default | Notes                                                                                                                                                                              |
-| ------------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                             | —       | Required; letters/digits/`_`/`-`. Names the satellite everywhere: `voice.satellites.<id>`, REST URLs, announcement targets. `local` is reserved.                                   |
-| `name`                                           | the id  | Display name.                                                                                                                                                                      |
-| `host` / `port`                                  | —/10700 | Where the satellite listens.                                                                                                                                                       |
-| `wakeWords`                                      | none    | Wake word models this satellite listens for (e.g. `okay_nabu`). Leave empty for an announce-only speaker.                                                                          |
-| `hasControlApi` (+ `controlPort`, default 10800) | off     | Turn on when the satellite runs [our image](https://github.com/hoeken/wyoming-satellite) — unlocks the webapp Audio screen, record/play tests and record-and-transcribe for it.    |
-| `prePlaybackHook`                                | off     | Requires the control API. Before each sound or speech item, waits for the satellite's locally configured `/pre-playback` command. `prePlaybackRequestTimeoutMs` defaults to 15000. |
+| Setting                                          | Default | Notes                                                                                                                                                                           |
+| ------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                             | —       | Required; letters/digits/`_`/`-`. Names the satellite everywhere: `voice.satellites.<id>`, REST URLs, announcement targets. `local` is reserved.                                |
+| `name`                                           | the id  | Display name.                                                                                                                                                                   |
+| `host` / `port`                                  | —/10700 | Where the satellite listens.                                                                                                                                                    |
+| `wakeWords`                                      | none    | Wake word models this satellite listens for (e.g. `okay_nabu`). Leave empty for an announce-only speaker.                                                                       |
+| `hasControlApi` (+ `controlPort`, default 10800) | off     | Turn on when the satellite runs [our image](https://github.com/hoeken/wyoming-satellite) — unlocks the webapp Audio screen, record/play tests and record-and-transcribe for it. |
 
 ### Local satellite
 
 A mic/speaker plugged into the Signal K server box; the plugin runs the
 satellite container for you. Off by default.
 
-| Setting                                               | Default        | Notes                                                                                                                                                           |
-| ----------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `micDevice` / `sndDevice`                             | `auto`         | ALSA device strings — find them on the webapp **Audio** screen. `auto` = image default in ALSA mode and `pulse` in pulse-socket mode; mic `none` = output-only. |
-| `wakeWords`                                           | none           | As above.                                                                                                                                                       |
-| `audioMode`                                           | `alsa`         | `alsa` for headless boxes (/dev/snd passthrough); `pulse-socket` for desktop hosts (set `hostPulseSocket`).                                                     |
-| `feedbackSounds`                                      | on             | Awake/done chimes on wake-word interactions.                                                                                                                    |
-| `noiseSuppression` / `autoGain` / `micVolume`         | image defaults | Audio tuning, under "Audio tuning" in the panel.                                                                                                                |
-| `tag`                                                 | `auto`         | Satellite image version. `auto` tracks the newest release (`latest` + digest tracking); pin an explicit version to opt out.                                     |
-| `prePlaybackExecutable` / `prePlaybackArgs`           | disabled       | Fixed executable and argument array inside the satellite container. Runs before every sound or speech item without a shell.                                     |
-| `prePlaybackTimeoutMs` / `prePlaybackRetries`         | `5000` / `0`   | Per-attempt command timeout and number of local retries. Playback is skipped when all attempts fail.                                                            |
-| `prePlaybackRetryDelayMs` / `prePlaybackReadyDelayMs` | `250` / `0`    | Delay between failed attempts and delay after success before audio starts (useful while a display wakes).                                                       |
-
-The pre-playback hook is optional and backwards compatible. Its command and
-arguments remain local configuration; the LAN endpoint is parameterless and
-cannot select a command. Output is discarded and never copied into status or
-logs. A failed or timed-out hook prevents playback only on that target, whose
-tracked announcement result becomes `failed`. Retries happen on the satellite;
-after they are exhausted, submit a new announcement request to try again.
+| Setting                                       | Default        | Notes                                                                                                                                                           |
+| --------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `micDevice` / `sndDevice`                     | `auto`         | ALSA device strings — find them on the webapp **Audio** screen. `auto` = image default in ALSA mode and `pulse` in pulse-socket mode; mic `none` = output-only. |
+| `wakeWords`                                   | none           | As above.                                                                                                                                                       |
+| `audioMode`                                   | `alsa`         | `alsa` for headless boxes (/dev/snd passthrough); `pulse-socket` for desktop hosts (set `hostPulseSocket`).                                                     |
+| `feedbackSounds`                              | on             | Awake/done chimes on wake-word interactions.                                                                                                                    |
+| `noiseSuppression` / `autoGain` / `micVolume` | image defaults | Audio tuning, under "Audio tuning" in the panel.                                                                                                                |
+| `tag`                                         | `auto`         | Satellite image version. `auto` tracks the newest release (`latest` + digest tracking); pin an explicit version to opt out.                                     |
 
 ### Services
 

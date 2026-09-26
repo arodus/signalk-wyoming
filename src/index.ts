@@ -49,7 +49,6 @@ import {
 } from "./announcements.js";
 import { SoundLibrary } from "./sounds.js";
 import { join } from "node:path";
-import { runPrePlaybackHook } from "./pre-playback.js";
 
 export type {
   AnnouncementApiV1,
@@ -260,14 +259,6 @@ export default function plugin(
       { onEvent: onSatelliteEvent, log: (msg) => app.debug(msg) },
     );
     const queue = new AnnouncementQueue({
-      prepare: entry.prePlaybackHook
-        ? () =>
-            runPrePlaybackHook({
-              host: entry.host,
-              port: entry.controlPort as number,
-              timeoutMs: entry.prePlaybackRequestTimeoutMs ?? 15000,
-            })
-        : undefined,
       play: (item) => satellite.play(item.audio),
       cancelPlayback: () => satellite.cancelPlayback(),
       // Urgent announcement mid-pipeline cancels the pipeline (spec §2.5).
@@ -478,14 +469,6 @@ export default function plugin(
             wakeWords: config.localSatellite.wakeWords,
             hasControlApi: true,
             controlPort: addresses.controlPort,
-            prePlaybackHook: config.localSatellite.prePlaybackExecutable !== "",
-            prePlaybackRequestTimeoutMs:
-              config.localSatellite.prePlaybackTimeoutMs *
-                (config.localSatellite.prePlaybackRetries + 1) +
-              config.localSatellite.prePlaybackRetryDelayMs *
-                config.localSatellite.prePlaybackRetries +
-              config.localSatellite.prePlaybackReadyDelayMs +
-              2000,
           });
         }
         const warning = await local.checkAudioDevices(addresses);

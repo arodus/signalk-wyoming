@@ -108,14 +108,6 @@ export function buildLocalSatelliteEnv(
   if (local.audioMode === "pulse-socket") {
     env.PULSE_SERVER = `unix://${PULSE_SOCKET_CONTAINER_PATH}`;
   }
-  if (local.prePlaybackExecutable !== "") {
-    env.PRE_PLAYBACK_EXECUTABLE = local.prePlaybackExecutable;
-    env.PRE_PLAYBACK_ARGS_JSON = JSON.stringify(local.prePlaybackArgs);
-    env.PRE_PLAYBACK_TIMEOUT_MS = String(local.prePlaybackTimeoutMs);
-    env.PRE_PLAYBACK_RETRIES = String(local.prePlaybackRetries);
-    env.PRE_PLAYBACK_RETRY_DELAY_MS = String(local.prePlaybackRetryDelayMs);
-    env.PRE_PLAYBACK_READY_DELAY_MS = String(local.prePlaybackReadyDelayMs);
-  }
   return env;
 }
 

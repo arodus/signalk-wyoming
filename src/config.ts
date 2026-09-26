@@ -41,10 +41,6 @@ export interface SatelliteConfig {
   hasControlApi?: boolean;
   /** Control API port (default 10800); only set when hasControlApi. */
   controlPort?: number;
-  /** Run the satellite's locally configured hook before each playback. */
-  prePlaybackHook?: boolean;
-  /** Orchestrator-side deadline for the control API request. */
-  prePlaybackRequestTimeoutMs?: number;
 }
 
 export type AudioMode = "alsa" | "pulse-socket";
@@ -80,12 +76,6 @@ export interface LocalSatelliteConfig {
   micMixerVolume?: number;
   /** Image tag; 'auto' runs the floating `latest` with digest tracking. */
   tag: string;
-  prePlaybackExecutable: string;
-  prePlaybackArgs: string[];
-  prePlaybackTimeoutMs: number;
-  prePlaybackRetries: number;
-  prePlaybackRetryDelayMs: number;
-  prePlaybackReadyDelayMs: number;
 }
 
 export interface ServicesConfig {
@@ -142,12 +132,6 @@ export const DEFAULT_LOCAL_SATELLITE: LocalSatelliteConfig = {
   sndMixerVolume: 100,
   micMixerVolume: 100,
   tag: "auto",
-  prePlaybackExecutable: "",
-  prePlaybackArgs: [],
-  prePlaybackTimeoutMs: 5000,
-  prePlaybackRetries: 0,
-  prePlaybackRetryDelayMs: 250,
-  prePlaybackReadyDelayMs: 0,
 };
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -264,32 +248,6 @@ function parseSatellite(raw: unknown, index: number): SatelliteConfig {
     sat.hasControlApi = true;
     sat.controlPort = controlPort;
   }
-  const prePlaybackHook = optionalBoolean(
-    raw,
-    "prePlaybackHook",
-    false,
-    context,
-  );
-  if (prePlaybackHook && !hasControlApi) {
-    throw new Error(
-      `${context} ("${id}"): prePlaybackHook requires hasControlApi`,
-    );
-  }
-  if (prePlaybackHook) {
-    const timeout = optionalNumber(
-      raw,
-      "prePlaybackRequestTimeoutMs",
-      15000,
-      context,
-    );
-    if (!Number.isInteger(timeout) || timeout < 100 || timeout > 600000) {
-      throw new Error(
-        `${context} ("${id}"): prePlaybackRequestTimeoutMs must be an integer 100-600000`,
-      );
-    }
-    sat.prePlaybackHook = true;
-    sat.prePlaybackRequestTimeoutMs = timeout;
-  }
   return sat;
 }
 
@@ -358,44 +316,7 @@ function parseLocalSatellite(raw: unknown): LocalSatelliteConfig {
     sndMixerVolume: mixerPercent(raw, "sndMixerVolume", context),
     micMixerVolume: mixerPercent(raw, "micMixerVolume", context),
     tag: optionalString(raw, "tag", "auto", context),
-    prePlaybackExecutable: optionalString(
-      raw,
-      "prePlaybackExecutable",
-      "",
-      context,
-    ),
-    prePlaybackArgs: [],
-    prePlaybackTimeoutMs: 5000,
-    prePlaybackRetries: 0,
-    prePlaybackRetryDelayMs: 250,
-    prePlaybackReadyDelayMs: 0,
   };
-  if (raw.prePlaybackArgs !== undefined) {
-    if (
-      !Array.isArray(raw.prePlaybackArgs) ||
-      raw.prePlaybackArgs.some((arg) => typeof arg !== "string")
-    ) {
-      throw new Error(`${context}.prePlaybackArgs must be an array of strings`);
-    }
-    cfg.prePlaybackArgs = raw.prePlaybackArgs;
-  }
-  const hookRanges = {
-    prePlaybackTimeoutMs: [100, 60000, 5000],
-    prePlaybackRetries: [0, 5, 0],
-    prePlaybackRetryDelayMs: [0, 30000, 250],
-    prePlaybackReadyDelayMs: [0, 60000, 0],
-  } as const;
-  for (const [key, [minimum, maximum, fallback]] of Object.entries(
-    hookRanges,
-  ) as [keyof typeof hookRanges, readonly [number, number, number]][]) {
-    const value = optionalNumber(raw, key, fallback, context);
-    if (!Number.isInteger(value) || value < minimum || value > maximum) {
-      throw new Error(
-        `${context}.${key} must be an integer ${minimum}-${maximum}`,
-      );
-    }
-    cfg[key] = value;
-  }
   for (const key of ["noiseSuppression", "autoGain", "micVolume"] as const) {
     const v = raw[key];
     if (v === undefined || v === null) continue;
@@ -546,20 +467,6 @@ export function buildSchema(): Record<string, unknown> {
               default: SATELLITE_CONTROL_PORT,
               description: "Only used when the control API is enabled",
             },
-            prePlaybackHook: {
-              type: "boolean",
-              title: "Run satellite pre-playback hook",
-              default: false,
-              description:
-                "Before every sound or speech item, POST /pre-playback and wait for the satellite-local command to succeed",
-            },
-            prePlaybackRequestTimeoutMs: {
-              type: "number",
-              title: "Pre-playback request timeout (ms)",
-              minimum: 100,
-              maximum: 600000,
-              default: 15000,
-            },
           },
         },
       },
@@ -647,48 +554,6 @@ export function buildSchema(): Record<string, unknown> {
             default: "auto",
             description:
               "ghcr.io/hoeken/wyoming-satellite tag; 'auto' = pinned release",
-          },
-          prePlaybackExecutable: {
-            type: "string",
-            title: "Pre-playback executable",
-            default: "",
-            description:
-              "Absolute executable inside the satellite container; empty disables the hook",
-          },
-          prePlaybackArgs: {
-            type: "array",
-            title: "Pre-playback arguments",
-            items: { type: "string" },
-            default: [],
-            description: "Fixed arguments; no shell is used",
-          },
-          prePlaybackTimeoutMs: {
-            type: "number",
-            title: "Command timeout (ms)",
-            default: 5000,
-            minimum: 100,
-            maximum: 60000,
-          },
-          prePlaybackRetries: {
-            type: "number",
-            title: "Command retries",
-            default: 0,
-            minimum: 0,
-            maximum: 5,
-          },
-          prePlaybackRetryDelayMs: {
-            type: "number",
-            title: "Retry delay (ms)",
-            default: 250,
-            minimum: 0,
-            maximum: 30000,
-          },
-          prePlaybackReadyDelayMs: {
-            type: "number",
-            title: "Screen readiness delay (ms)",
-            default: 0,
-            minimum: 0,
-            maximum: 60000,
           },
         },
       },
