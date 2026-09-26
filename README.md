@@ -258,9 +258,11 @@ Three screens, live-updated:
   plugin config), _record 3 s & play back_, _play tone_, and a live VU
   meter. Recording briefly pauses the satellite (~2 s) to free the mic.
 - **Test** — type-and-say (target select, voice picker, urgent, mute
-  toggle), **record-and-transcribe** (test speech-to-text before any wake
-  word exists — the latency figure it shows is the practical benchmark for
-  choosing a whisper model), and a live wake-word detection feed.
+  toggle), notification-sound playback with tracked per-satellite results and
+  custom PCM WAV upload/delete, **record-and-transcribe** (test speech-to-text
+  before any wake word exists — the latency figure it shows is the practical
+  benchmark for choosing a whisper model), and a live wake-word detection
+  feed.
 
 Works over plain LAN HTTP; requests ride your Signal K session — if you see
 "not authorized", log in via the Signal K admin UI.
