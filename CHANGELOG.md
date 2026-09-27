@@ -7,6 +7,9 @@
   bounded idempotency keys.
 - Built-in notification sounds plus persistent custom PCM WAV upload and
   deletion APIs. Sound playback does not require Piper.
+- Notification-sound management in the Test webapp, including target
+  selection, tracked per-satellite playback results, and custom WAV upload and
+  deletion.
 
 ## Changed
 
