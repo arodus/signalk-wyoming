@@ -20,7 +20,11 @@ import {
   type ContainerConfig,
   type VersionSourceResult,
 } from "signalk-container-helper";
-import type { AdvancedConfig, LocalSatelliteConfig } from "./config.js";
+import type {
+  AdvancedConfig,
+  AudioMode,
+  LocalSatelliteConfig,
+} from "./config.js";
 import { SATELLITE_CONTROL_PORT, WYOMING_SATELLITE_PORT } from "./config.js";
 import { parseWyomingUri } from "./protocol/client.js";
 
@@ -38,6 +42,11 @@ export const LOCAL_SATELLITE_CONTAINER_NAME = "wyoming-satellite";
 /** In-container alias for the Signal K host (extraHosts host-gateway). */
 export const SK_HOST_ALIAS = "skhost";
 const PULSE_SOCKET_CONTAINER_PATH = "/run/pulse-socket";
+/**
+ * Where the image's root user looks for the Pulse auth cookie — mirrors the
+ * upstream pulse-socket recipe's `${HOME}/.config/pulse/cookie` bind.
+ */
+export const PULSE_COOKIE_CONTAINER_PATH = "/root/.config/pulse/cookie";
 
 export interface LocalSatelliteBuildInputs {
   local: LocalSatelliteConfig;
@@ -67,14 +76,48 @@ export function containerWakeUri(uri: string): string {
   }
 }
 
+/**
+ * Device string the image receives for a configured mic/speaker value.
+ * `auto` means "image default" in ALSA mode (left unset so the image's own
+ * detection runs) and `pulse` in pulse-socket mode (the image's auto policy
+ * resolves to an ALSA card, which the socket mode never exposes — issue #5).
+ */
+function resolveDevice(value: string, mode: AudioMode): string | undefined {
+  if (value !== "auto") return value;
+  return mode === "pulse-socket" ? "pulse" : undefined;
+}
+
+/** True for a device string that names the ALSA `pulse` plugin. */
+function isPulseDevice(value: string): boolean {
+  return value === "pulse" || value.startsWith("pulse:");
+}
+
+/**
+ * Whether the satellite needs raw sound-card access (/dev/snd + the audio
+ * group). Always in ALSA mode; in pulse-socket mode only when the user
+ * overrode a device with an ALSA hardware string (`plughw:...`, `hw:...`,
+ * `default`) — dropping the passthrough there would turn a working
+ * override into a restart loop. `auto` resolves to `pulse` and `none`
+ * names nothing, so neither counts.
+ */
+export function usesAlsaHardware(local: LocalSatelliteConfig): boolean {
+  if (local.audioMode === "alsa") return true;
+  return [local.micDevice, local.sndDevice].some((value) => {
+    const device = resolveDevice(value, local.audioMode);
+    return device !== undefined && device !== "none" && !isPulseDevice(device);
+  });
+}
+
 /** Env block for the satellite image (pure — unit-tested directly). */
 export function buildLocalSatelliteEnv(
   inputs: LocalSatelliteBuildInputs,
 ): Record<string, string> {
   const { local, advanced, wakeUri } = inputs;
   const env: Record<string, string> = {};
-  if (local.micDevice !== "auto") env.MIC_DEVICE = local.micDevice;
-  if (local.sndDevice !== "auto") env.SND_DEVICE = local.sndDevice;
+  const mic = resolveDevice(local.micDevice, local.audioMode);
+  const snd = resolveDevice(local.sndDevice, local.audioMode);
+  if (mic !== undefined) env.MIC_DEVICE = mic;
+  if (snd !== undefined) env.SND_DEVICE = snd;
   if (wakeUri !== null && local.wakeWords.length > 0) {
     env.WAKE_URI = containerWakeUri(wakeUri);
     env.WAKE_WORD_NAME = local.wakeWords.join(" ");
@@ -165,17 +208,30 @@ export function buildLocalSatelliteConfig(
   }
   if (local.audioMode === "pulse-socket") {
     config.volumes = { [PULSE_SOCKET_CONTAINER_PATH]: local.hostPulseSocket };
+    if (local.hostPulseCookie !== "") {
+      // PulseAudio proper demands its cookie when the connecting uid (root
+      // in the container) differs from the server's; PipeWire's shim does
+      // not. `skip` when missing: a bare bind of an absent file would make
+      // the runtime create a *directory* at the cookie path on the host.
+      // (No `readOnly`: the helper release this plugin pins predates it.)
+      config.volumes[PULSE_COOKIE_CONTAINER_PATH] = {
+        source: local.hostPulseCookie,
+        ifMissing: "skip",
+      };
+    }
   }
-  // Audio-device fields: applied by signalk-container > 1.23.2 (which
-  // emits the /dev/snd bind even from inside a container — well-known
-  // device dirs are trusted optimistically); silently dropped by 1.23.2
-  // and older (no drift loops).
-  const forward = config as ContainerConfig & {
-    devices?: string[];
-    groupAdd?: string[];
-  };
-  forward.devices = ["/dev/snd"];
-  forward.groupAdd = ["audio"];
+  if (usesAlsaHardware(local)) {
+    // Audio-device fields: applied by signalk-container > 1.23.2 (which
+    // emits the /dev/snd bind even from inside a container — well-known
+    // device dirs are trusted optimistically); silently dropped by 1.23.2
+    // and older (no drift loops).
+    const forward = config as ContainerConfig & {
+      devices?: string[];
+      groupAdd?: string[];
+    };
+    forward.devices = ["/dev/snd"];
+    forward.groupAdd = ["audio"];
+  }
   return config;
 }
 
@@ -328,7 +384,10 @@ export interface LocalSatelliteHandle {
    * Probe the control API's /devices; returns a warning string when the
    * container sees no audio devices (host without a sound card, or a
    * manager that dropped the /dev/snd passthrough), null when devices
-   * are present or the probe is inconclusive.
+   * are present or the probe is inconclusive. /devices lists ALSA cards
+   * only, so the probe is skipped whenever the config asks for no
+   * /dev/snd passthrough (pulse-socket mode without a hardware override):
+   * an empty list is the expected state there, not a fault.
    */
   checkAudioDevices(addresses: LocalSatelliteAddresses): Promise<string | null>;
 }
@@ -411,6 +470,7 @@ export function createLocalSatellite(
       addresses: LocalSatelliteAddresses,
     ): Promise<string | null> {
       if (deps.local.micDevice === "none") return null;
+      if (!usesAlsaHardware(deps.local)) return null;
       try {
         const res = await fetchImpl(
           `http://${addresses.controlHost}:${addresses.controlPort}/devices`,

@@ -215,6 +215,18 @@ describe("parseConfig services / defaults / advanced / localSatellite", () => {
     expect(cfg.advanced.maxUtteranceMs).toBe(10000);
   });
 
+  it("parses hostPulseCookie, defaulting to none", () => {
+    expect(parseConfig({}).localSatellite.hostPulseCookie).toBe("");
+    expect(
+      parseConfig({
+        localSatellite: {
+          audioMode: "pulse-socket",
+          hostPulseCookie: "/home/pi/.config/pulse/cookie",
+        },
+      }).localSatellite.hostPulseCookie,
+    ).toBe("/home/pi/.config/pulse/cookie");
+  });
+
   it("rejects an unknown audioMode", () => {
     expect(() =>
       parseConfig({ localSatellite: { audioMode: "jack" } }),
@@ -297,5 +309,15 @@ describe("schema and local satellite entry", () => {
   it("buildUiSchema collapses the advanced section", () => {
     const ui = buildUiSchema() as Record<string, Record<string, unknown>>;
     expect(ui.advanced?.["ui:field"]).toBe("collapsible");
+  });
+});
+
+describe("speechMinRms default", () => {
+  it("matches the endpointer's absolute threshold", async () => {
+    // config.ts duplicates the value rather than importing it: the import
+    // creates a config -> endpointer -> index cycle that breaks the plugin at
+    // load time. This test is what keeps the copy honest.
+    const { SPEECH_ABS_MIN_RMS } = await import("../src/endpointer.js");
+    expect(DEFAULT_ADVANCED.speechMinRms).toBe(SPEECH_ABS_MIN_RMS);
   });
 });
