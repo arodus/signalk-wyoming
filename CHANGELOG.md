@@ -1,3 +1,27 @@
+# Unreleased
+
+## Fixed
+
+- **`pulse-socket` audio mode now actually routes through the host sound
+  server** (#5). The generated satellite config left both devices on the
+  image's ALSA-oriented `auto` default and still bound `/dev/snd`, so the
+  container fought the desktop's PipeWire/PulseAudio for the card. `auto`
+  now resolves to `pulse` in this mode and `/dev/snd` plus the `audio`
+  group are only requested when something needs raw card access: always in
+  `alsa` mode, and in `pulse-socket` mode only when you overrode a device
+  with an ALSA hardware string (`plughw:...`, `hw:...`), so such an
+  override keeps working instead of restart-looping. The "no audio devices"
+  startup probe is skipped when `/dev/snd` is intentionally absent — an
+  empty card list is the expected state there.
+
+## Added
+
+- **`hostPulseCookie`** (pulse-socket mode). PulseAudio proper refuses a
+  client running as another uid without the server's auth cookie; point
+  this at the desktop user's `~/.config/pulse/cookie` and it is mounted
+  into the container (skipped when the file is missing).
+  PipeWire's Pulse shim does not need it.
+
 # v0.2.1
 
 Nothing to reconfigure. The one behavior change: with the local satellite's

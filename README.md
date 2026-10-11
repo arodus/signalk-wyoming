@@ -126,10 +126,19 @@ satellite container for you. Off by default.
 | --------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `micDevice` / `sndDevice`                     | `auto`         | ALSA device strings — find them on the webapp **Audio** screen. `auto` = image default in ALSA mode and `pulse` in pulse-socket mode; mic `none` = output-only. |
 | `wakeWords`                                   | none           | As above.                                                                                                                                                       |
-| `audioMode`                                   | `alsa`         | `alsa` for headless boxes (/dev/snd passthrough); `pulse-socket` for desktop hosts (set `hostPulseSocket`).                                                     |
+| `audioMode`                                   | `alsa`         | `alsa` for headless boxes (/dev/snd passthrough); `pulse-socket` for desktop hosts (set `hostPulseSocket`, and `hostPulseCookie` for PulseAudio proper).        |
 | `feedbackSounds`                              | on             | Awake/done chimes on wake-word interactions.                                                                                                                    |
 | `noiseSuppression` / `autoGain` / `micVolume` | image defaults | Audio tuning, under "Audio tuning" in the panel.                                                                                                                |
 | `tag`                                         | `auto`         | Satellite image version. `auto` tracks the newest release (`latest` + digest tracking); pin an explicit version to opt out.                                     |
+
+In `pulse-socket` mode the container gets the host's sound-server socket
+instead of `/dev/snd`, so the **Audio** screen lists no cards there — that is
+expected, not a fault. PulseAudio proper (unlike PipeWire's Pulse shim)
+refuses a client running as a different uid unless it presents the server's
+auth cookie: point `hostPulseCookie` at the desktop user's
+`~/.config/pulse/cookie` (skipped silently when the file is missing). Setting
+an explicit ALSA hardware device (`plughw:...`, `hw:...`) in pulse-socket mode
+keeps the `/dev/snd` passthrough so the override still opens.
 
 ### Services
 

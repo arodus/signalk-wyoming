@@ -54,6 +54,12 @@ export interface LocalSatelliteConfig {
   feedbackSounds: boolean;
   /** Host sound-server socket path for audioMode 'pulse-socket'. */
   hostPulseSocket: string;
+  /**
+   * Host Pulse auth-cookie path for audioMode 'pulse-socket' ("" = none).
+   * PulseAudio proper requires it when the container's uid differs from
+   * the server's; PipeWire's Pulse shim does not.
+   */
+  hostPulseCookie: string;
   /** webrtc noise suppression level 0-4 (unset = image default). */
   noiseSuppression?: number;
   /** webrtc auto gain 0-31 dbFS (unset = image default). */
@@ -125,6 +131,7 @@ export const DEFAULT_LOCAL_SATELLITE: LocalSatelliteConfig = {
   audioMode: "alsa",
   feedbackSounds: true,
   hostPulseSocket: "/run/user/1000/pulse/native",
+  hostPulseCookie: "",
   // Asserted on the card's own mixer at every satellite start. Defaulting to
   // full scale is deliberate: the failure these fix is "the speaker went
   // quiet on its own", and a default that left the mixer untouched would
@@ -313,6 +320,12 @@ function parseLocalSatellite(raw: unknown): LocalSatelliteConfig {
       DEFAULT_LOCAL_SATELLITE.hostPulseSocket,
       context,
     ),
+    hostPulseCookie: optionalString(
+      raw,
+      "hostPulseCookie",
+      DEFAULT_LOCAL_SATELLITE.hostPulseCookie,
+      context,
+    ),
     sndMixerVolume: mixerPercent(raw, "sndMixerVolume", context),
     micMixerVolume: mixerPercent(raw, "micMixerVolume", context),
     tag: optionalString(raw, "tag", "auto", context),
@@ -480,13 +493,18 @@ export function buildSchema(): Record<string, unknown> {
             title: "Microphone device",
             default: "auto",
             description:
-              "ALSA device string (see the webapp Audio screen); 'auto' = image default, 'none' = no microphone",
+              "ALSA device string (see the webapp Audio screen in alsa mode); " +
+              "'auto' = image default in alsa mode, 'pulse' in pulse-socket " +
+              "mode; 'none' = no microphone. A hardware string in pulse-socket " +
+              "mode keeps the /dev/snd passthrough",
           },
           sndDevice: {
             type: "string",
             title: "Speaker device",
             default: "auto",
-            description: "ALSA device string; 'auto' = image default",
+            description:
+              "ALSA device string; 'auto' = image default in alsa mode, " +
+              "'pulse' in pulse-socket mode",
           },
           wakeWords: {
             type: "array",
@@ -541,6 +559,15 @@ export function buildSchema(): Record<string, unknown> {
             title: "Host pulse socket",
             default: DEFAULT_LOCAL_SATELLITE.hostPulseSocket,
             description: "Sound-server socket path (pulse-socket mode only)",
+          },
+          hostPulseCookie: {
+            type: "string",
+            title: "Host pulse cookie",
+            default: DEFAULT_LOCAL_SATELLITE.hostPulseCookie,
+            description:
+              "Pulse auth cookie path, e.g. /home/<user>/.config/pulse/cookie " +
+              "(pulse-socket mode only). Needed for PulseAudio proper, not " +
+              "for PipeWire; leave empty to skip",
           },
           noiseSuppression: {
             type: "number",

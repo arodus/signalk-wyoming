@@ -60,6 +60,7 @@ const DEFAULT_LOCAL_SATELLITE = {
   audioMode: "alsa",
   feedbackSounds: true,
   hostPulseSocket: "/run/user/1000/pulse/native",
+  hostPulseCookie: "",
   sndMixerVolume: 100,
   micMixerVolume: 100,
   tag: "auto",
@@ -400,6 +401,10 @@ export default function PluginConfigurationPanel({ configuration, save }) {
       cfgLocal.hostPulseSocket !== ""
         ? cfgLocal.hostPulseSocket
         : DEFAULT_LOCAL_SATELLITE.hostPulseSocket,
+    hostPulseCookie:
+      typeof cfgLocal.hostPulseCookie === "string"
+        ? cfgLocal.hostPulseCookie
+        : DEFAULT_LOCAL_SATELLITE.hostPulseCookie,
     sndMixerVolume:
       typeof cfgLocal.sndMixerVolume === "number"
         ? cfgLocal.sndMixerVolume
@@ -593,6 +598,7 @@ export default function PluginConfigurationPanel({ configuration, save }) {
       feedbackSounds: local.feedbackSounds,
       hostPulseSocket:
         local.hostPulseSocket.trim() || DEFAULT_LOCAL_SATELLITE.hostPulseSocket,
+      hostPulseCookie: local.hostPulseCookie.trim(),
       sndMixerVolume: local.sndMixerVolume,
       micMixerVolume: local.micMixerVolume,
       tag: local.tag,
@@ -714,7 +720,11 @@ export default function PluginConfigurationPanel({ configuration, save }) {
           )}
           <FieldRow
             label="Microphone device"
-            hint="ALSA device string (see the webapp Audio screen); 'auto' = image default, 'none' = no microphone"
+            hint={
+              local.audioMode === "pulse-socket"
+                ? "'auto' = pulse (the host sound server); 'none' = no microphone; an ALSA hardware string keeps the /dev/snd passthrough"
+                : "ALSA device string (see the webapp Audio screen); 'auto' = image default, 'none' = no microphone"
+            }
           >
             <input
               style={{ ...S.input, width: 180 }}
@@ -727,7 +737,11 @@ export default function PluginConfigurationPanel({ configuration, save }) {
           </FieldRow>
           <FieldRow
             label="Speaker device"
-            hint="ALSA device string; 'auto' = image default"
+            hint={
+              local.audioMode === "pulse-socket"
+                ? "'auto' = pulse (the host sound server); an ALSA hardware string keeps the /dev/snd passthrough"
+                : "ALSA device string; 'auto' = image default"
+            }
           >
             <input
               style={{ ...S.input, width: 180 }}
@@ -795,6 +809,21 @@ export default function PluginConfigurationPanel({ configuration, save }) {
                   setLocal({ ...local, hostPulseSocket: e.target.value })
                 }
                 placeholder={DEFAULT_LOCAL_SATELLITE.hostPulseSocket}
+              />
+            </FieldRow>
+          )}
+          {local.audioMode === "pulse-socket" && (
+            <FieldRow
+              label="Host pulse cookie"
+              hint="auth cookie path; needed for PulseAudio proper (not PipeWire), empty = skip"
+            >
+              <input
+                style={{ ...S.input, width: 260 }}
+                value={local.hostPulseCookie}
+                onChange={(e) =>
+                  setLocal({ ...local, hostPulseCookie: e.target.value })
+                }
+                placeholder="/home/<user>/.config/pulse/cookie"
               />
             </FieldRow>
           )}

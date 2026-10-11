@@ -215,6 +215,18 @@ describe("parseConfig services / defaults / advanced / localSatellite", () => {
     expect(cfg.advanced.maxUtteranceMs).toBe(10000);
   });
 
+  it("parses hostPulseCookie, defaulting to none", () => {
+    expect(parseConfig({}).localSatellite.hostPulseCookie).toBe("");
+    expect(
+      parseConfig({
+        localSatellite: {
+          audioMode: "pulse-socket",
+          hostPulseCookie: "/home/pi/.config/pulse/cookie",
+        },
+      }).localSatellite.hostPulseCookie,
+    ).toBe("/home/pi/.config/pulse/cookie");
+  });
+
   it("rejects an unknown audioMode", () => {
     expect(() =>
       parseConfig({ localSatellite: { audioMode: "jack" } }),

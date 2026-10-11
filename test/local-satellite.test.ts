@@ -10,7 +10,9 @@ import {
   LOCAL_SATELLITE_FLOATING_TAG,
   LOCAL_SATELLITE_IMAGE,
   micWithoutWakeWordsWarning,
+  PULSE_COOKIE_CONTAINER_PATH,
   SATELLITE_TAGS_URL,
+  usesAlsaHardware,
   type LocalSatelliteBuildInputs,
 } from "../src/local-satellite.js";
 
@@ -164,6 +166,38 @@ describe("buildLocalSatelliteEnv", () => {
   });
 });
 
+describe("usesAlsaHardware", () => {
+  it("is always true in alsa mode", () => {
+    expect(usesAlsaHardware({ ...DEFAULT_LOCAL_SATELLITE })).toBe(true);
+    expect(
+      usesAlsaHardware({ ...DEFAULT_LOCAL_SATELLITE, micDevice: "none" }),
+    ).toBe(true);
+  });
+
+  it("is false in pulse-socket mode with auto/none/pulse devices", () => {
+    const pulse = {
+      ...DEFAULT_LOCAL_SATELLITE,
+      audioMode: "pulse-socket" as const,
+    };
+    expect(usesAlsaHardware(pulse)).toBe(false);
+    expect(usesAlsaHardware({ ...pulse, micDevice: "none" })).toBe(false);
+    expect(
+      usesAlsaHardware({ ...pulse, micDevice: "pulse", sndDevice: "pulse" }),
+    ).toBe(false);
+  });
+
+  it("is true in pulse-socket mode once a device names ALSA hardware", () => {
+    const pulse = {
+      ...DEFAULT_LOCAL_SATELLITE,
+      audioMode: "pulse-socket" as const,
+    };
+    expect(
+      usesAlsaHardware({ ...pulse, sndDevice: "plughw:CARD=Device,DEV=0" }),
+    ).toBe(true);
+    expect(usesAlsaHardware({ ...pulse, micDevice: "hw:1,0" })).toBe(true);
+  });
+});
+
 describe("micWithoutWakeWordsWarning", () => {
   const local = (
     overrides: Partial<LocalSatelliteBuildInputs["local"]> = {},
@@ -254,6 +288,41 @@ describe("buildLocalSatelliteConfig", () => {
     const forward = config as { devices?: string[]; groupAdd?: string[] };
     expect(forward.devices).toBeUndefined();
     expect(forward.groupAdd).toBeUndefined();
+  });
+
+  it("mounts the pulse cookie, skipped when missing", () => {
+    const config = buildLocalSatelliteConfig(
+      "0.1.0",
+      inputs({
+        audioMode: "pulse-socket",
+        hostPulseCookie: "/home/pi/.config/pulse/cookie",
+      }),
+    );
+    expect(config.volumes?.[PULSE_COOKIE_CONTAINER_PATH]).toEqual({
+      source: "/home/pi/.config/pulse/cookie",
+      ifMissing: "skip",
+    });
+    const alsa = buildLocalSatelliteConfig(
+      "0.1.0",
+      inputs({ hostPulseCookie: "/home/pi/.config/pulse/cookie" }),
+    );
+    expect(alsa.volumes).toBeUndefined();
+  });
+
+  it("keeps /dev/snd in pulse-socket mode for an ALSA hardware override", () => {
+    const config = buildLocalSatelliteConfig(
+      "0.1.0",
+      inputs({
+        audioMode: "pulse-socket",
+        sndDevice: "plughw:CARD=Device,DEV=0",
+      }),
+    );
+    expect(config.volumes).toEqual({
+      "/run/pulse-socket": "/run/user/1000/pulse/native",
+    });
+    const forward = config as { devices?: string[]; groupAdd?: string[] };
+    expect(forward.devices).toEqual(["/dev/snd"]);
+    expect(forward.groupAdd).toEqual(["audio"]);
   });
 
   it("enables digest tracking so 'auto' → latest follows releases", () => {
@@ -396,5 +465,61 @@ describe("update-detection registration", () => {
       kind: "error",
       error: "GitHub answered HTTP 500",
     });
+  });
+});
+
+describe("checkAudioDevices", () => {
+  const app = {
+    debug: () => {},
+    setPluginStatus: () => {},
+    setPluginError: () => {},
+  };
+  const addresses = {
+    host: "127.0.0.1",
+    port: 10700,
+    controlHost: "127.0.0.1",
+    controlPort: 10800,
+  };
+  const noDevices = (): typeof fetch =>
+    vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ capture: [], playback: [] }),
+    })) as unknown as typeof fetch;
+  const probe = (
+    local: Partial<LocalSatelliteBuildInputs["local"]>,
+    fetchImpl: typeof fetch,
+  ) =>
+    createLocalSatellite({
+      app,
+      local: { ...DEFAULT_LOCAL_SATELLITE, ...local },
+      advanced: { ...DEFAULT_ADVANCED },
+      wakeUri: () => null,
+      fetchImpl,
+    }).checkAudioDevices(addresses);
+
+  it("warns about the missing /dev/snd passthrough in alsa mode", async () => {
+    const fetchImpl = noDevices();
+    await expect(probe({}, fetchImpl)).resolves.toMatch(/\/dev\/snd/);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://127.0.0.1:10800/devices",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("skips the probe in pulse-socket mode: no ALSA cards is expected there", async () => {
+    const fetchImpl = noDevices();
+    await expect(
+      probe({ audioMode: "pulse-socket" }, fetchImpl),
+    ).resolves.toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("still probes in pulse-socket mode when a hardware override needs /dev/snd", async () => {
+    const fetchImpl = noDevices();
+    await expect(
+      probe({ audioMode: "pulse-socket", micDevice: "hw:1,0" }, fetchImpl),
+    ).resolves.toMatch(/no audio devices/);
+    expect(fetchImpl).toHaveBeenCalled();
   });
 });
