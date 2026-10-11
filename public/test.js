@@ -557,7 +557,7 @@ export function initTest(root) {
     }
   });
 
-  onEvent("announcement", (data) => {
+  onEvent("delivery", (data) => {
     if (data?.announcementId === trackedAnnouncementId) {
       refreshAnnouncement(trackedAnnouncementId);
     }

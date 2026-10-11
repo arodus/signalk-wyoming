@@ -158,6 +158,7 @@ const SSE_KINDS = [
   "state",
   "command",
   "announcement",
+  "delivery",
   "detection",
   "service",
   "error",

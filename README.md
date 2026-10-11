@@ -179,7 +179,8 @@ curl -X POST http://localhost:3000/plugins/signalk-wyoming/api/announcements \
 the original announcement without playing it twice. Reusing it for different
 content is rejected. The built-in sound IDs are `chime`, `warning`, and
 `alarm`; custom uncompressed PCM WAV files can be uploaded through
-`POST /api/sounds` and are stored in Signal K's data directory.
+`POST /api/sounds` and are stored under the plugin's data directory
+(`plugin-config-data/signalk-wyoming/sounds`).
 
 `played` means the satellite software sent Wyoming's `played`
 acknowledgement after accepting the complete audio stream. A timeout or lost
@@ -236,7 +237,7 @@ admin-only).
 | `POST /api/transcribe`                             | `{satellite, seconds?}` (1–10 s) → record → whisper → `{text, latencyMs}`; `503` until STT is available                  |
 | `POST /api/mute`                                   | `{muted: boolean}` → `{muted}` (same switch as the `voice.muted` PUT)                                                    |
 | `GET /api/log`                                     | recent events `[{at, kind, data}]`                                                                                       |
-| `GET /api/events`                                  | SSE: `state`, `command`, `announcement`, `detection`, `service`, `error`                                                 |
+| `GET /api/events`                                  | SSE: `state`, `command`, `announcement`, `delivery`, `detection`, `service`, `error`                                     |
 | `GET /api/versions`                                | local-satellite image versions `{versions: [{tag, prerelease?}]}` (works while the plugin is disabled)                   |
 | `GET /api/update/check` / `POST /api/update/apply` | local-satellite image updates (admin)                                                                                    |
 

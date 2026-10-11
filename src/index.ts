@@ -563,8 +563,10 @@ export default function plugin(
       });
 
       // --- generic announcements + backwards-compatible say() core ---
+      // getDataDirPath() is already plugin-scoped
+      // (<config>/plugin-config-data/signalk-wyoming).
       const soundDirectory = app.getDataDirPath
-        ? join(app.getDataDirPath(), PLUGIN_ID, "sounds")
+        ? join(app.getDataDirPath(), "sounds")
         : undefined;
       runtime.sounds = new SoundLibrary(soundDirectory, (msg) =>
         app.error(msg),
@@ -579,8 +581,12 @@ export default function plugin(
         warn: (msg) => app.error(msg),
         synthesize,
       });
+      // Per-target delivery transitions ride their own kind: the legacy
+      // `announcement` event (emitted by say() below) is one entry per
+      // request with {text, priority, queued}, and its consumers render it
+      // as such.
       runtime.announcements.subscribe((event) =>
-        runtime.hub?.emit("announcement", event),
+        runtime.hub?.emit("delivery", event),
       );
       const sayCore = createSay({
         directory: runtime.directory,

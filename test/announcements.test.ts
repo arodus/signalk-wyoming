@@ -41,11 +41,16 @@ function harness(options: { muted?: boolean; connected?: boolean } = {}) {
     log: vi.fn(),
     synthesize: vi.fn(async () => audio),
   });
-  const event = (type: AnnouncementQueueEvent["type"], error?: string) =>
+  const event = (
+    type: AnnouncementQueueEvent["type"],
+    error?: string,
+    extra: Partial<AnnouncementQueueEvent> = {},
+  ) =>
     service.handleQueueEvent("helm", {
       type,
       item: items[0] as AnnouncementItem,
       ...(error ? { error } : {}),
+      ...extra,
     });
   return { service, items, targets, event };
 }
@@ -82,6 +87,22 @@ describe("AnnouncementService", () => {
         content: { kind: "sound", soundId: "chime" },
       }),
     ).rejects.toThrow(/different content/);
+  });
+
+  it("marks a stream that ended without `played` as unknown, not played", async () => {
+    const h = harness();
+    const initial = await h.service.announce({
+      content: { kind: "sound", soundId: "alarm" },
+    });
+    const completed = h.service.wait(initial.id, { timeoutMs: 1000 });
+    h.event("play-start");
+    h.event("play-end", undefined, { confirmed: false });
+    const snapshot = await completed;
+    expect(snapshot.state).toBe("unknown");
+    expect(snapshot.targets.helm).toMatchObject({
+      state: "unknown",
+      error: expect.stringMatching(/confirm playback/),
+    });
   });
 
   it("marks missing playback proof as unknown", async () => {

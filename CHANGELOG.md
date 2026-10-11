@@ -14,8 +14,12 @@
 ## Changed
 
 - Satellite playback succeeds only after a Wyoming `played` acknowledgement.
-  Missing confirmation now produces an `unknown` result and resets the
-  connection instead of treating elapsed time as proof.
+  Missing confirmation now produces an `unknown` result instead of treating
+  elapsed time as proof. Satellites that never send `played` (wyoming-satellite
+  before 1.4.1, other implementations) keep working; their results read
+  `unknown`. Per-target delivery transitions are published on a new
+  `delivery` SSE event kind; the `announcement` kind keeps its one-per-request
+  shape.
 - The existing version-1 `say()` API remains enqueue-based and compatible.
 
 # v0.2.1
