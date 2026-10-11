@@ -628,6 +628,7 @@ export default function plugin(
         say: (opts) => sayFacade(opts),
         onSayResult: (result) =>
           app.debug(`voice.say result: ${JSON.stringify(result)}`),
+        announce: (request) => announcementFacade.announce(request),
       });
       runtime.publisher.start();
 

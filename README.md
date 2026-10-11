@@ -164,6 +164,27 @@ bypasses mute — use it for alarms. Normal announcements queue per satellite
 and respect the `voice.muted` switch. Failures are loud: if nothing could
 be played you get an error back, never a silent drop.
 
+#### Notification sounds
+
+A short sound instead of speech, with the same three surfaces as `say()`
+plus the webapp:
+
+- **REST**: `POST /plugins/signalk-wyoming/api/announcements` with
+  `{content: {kind: "sound", soundId: "alarm"}, targets?, priority?}` (curl
+  example below).
+- **Signal K PUT** to `voice.announce` — a sound id string (`"alarm"`), or
+  `{soundId | text, targets?, priority?, requestId?}`, or the full request
+  object the REST route takes.
+- **From another plugin**, in-process — see
+  [DEVELOPERS.md](DEVELOPERS.md#the-delivery-aware-announcement-api).
+- **Webapp** — the Test screen's notification-sound panel plays any sound
+  to chosen satellites and shows per-satellite results.
+
+Sounds come from the library: the built-ins `chime`, `warning` and `alarm`,
+plus WAV files uploaded through `POST /api/sounds` or the Test screen
+(uncompressed PCM, ≤ 5 MB, ≤ 30 s). `voice.say` is speech-only; a sound sent
+there is answered with a 400.
+
 For delivery-aware integrations, use the generic announcement API instead
 of `say()`. It accepts either speech or a notification sound and keeps a
 per-satellite lifecycle (`queued`, `playing`, `played`, `suppressed`,
@@ -205,6 +226,7 @@ Under `vessels.self`:
 | `voice.satellites.<id>.connected` | `boolean`                                                 |                                                                                                       |
 | `voice.satellites.<id>.state`     | `idle \| listening \| transcribing \| speaking`           |                                                                                                       |
 | `voice.say`                       | write-only PUT target                                     | value: a plain string or the `say()` options object                                                   |
+| `voice.announce`                  | write-only PUT target                                     | value: a sound id, `{soundId \| text, targets?, priority?, requestId?}` or a full request             |
 | `voice.muted`                     | `boolean`, PUT-able                                       | `true` suppresses `normal` announcements; `urgent` plays through. Defaults to `false`; not persisted. |
 
 Problems surface as notifications under `notifications.voice.*` (e.g. a
@@ -220,7 +242,7 @@ admin-only).
 | Method & path                                      | Body / result                                                                                                            |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `POST /api/say`                                    | `{text, targets?, voice?, priority?}` → `200` `{ok, queued, errors?, suppressed?}`; `503` when nothing could be queued   |
-| `POST /api/announcements`                          | speech or sound request with optional `requestId`, targets and priority → tracked snapshot                               |
+| `POST /api/announcements`                          | `{content: {kind: speech \| sound, …}, requestId?, targets?, priority?}` → `202` tracked snapshot                        |
 | `GET /api/announcements/:id`                       | current aggregate and per-satellite delivery state                                                                       |
 | `DELETE /api/announcements/:id`                    | cancel queued or in-progress playback                                                                                    |
 | `GET /api/sounds`                                  | built-in and uploaded sound metadata                                                                                     |

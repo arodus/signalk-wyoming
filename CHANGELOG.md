@@ -10,6 +10,9 @@
 - Notification-sound management in the Test webapp, including target
   selection, tracked per-satellite playback results, and custom WAV upload and
   deletion.
+- `voice.announce` Signal K PUT path: the sound counterpart of `voice.say`.
+  Takes a sound id, `{soundId | text, targets?, priority?, requestId?}` or a
+  full announcement request.
 
 ## Changed
 

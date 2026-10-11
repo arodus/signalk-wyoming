@@ -114,8 +114,15 @@ app.onPropertyValues("signalk-wyoming.announcements.api", (values) => {
 
 The version-1 object contains `announce`, `getAnnouncement`,
 `waitForAnnouncement`, `cancelAnnouncement`, and `onAnnouncementEvent`.
-Speech requires a discovered TTS service; sounds go straight to the satellite
-and therefore work without Piper. Completed request IDs/results are retained
+`content` is either `{kind: "speech", text, voice?}` or
+`{kind: "sound", soundId}` (a built-in or an uploaded sound). Speech requires
+a discovered TTS service; sounds go straight to the satellite and therefore
+work without Piper.
+
+The same service sits behind `POST /api/announcements` and the
+`voice.announce` PUT (`src/paths.ts`), which also accepts a bare sound id and
+`{soundId | text, …}` shorthands and answers 200 once a target is queued,
+503 when every target failed. Completed request IDs/results are retained
 in a bounded, time-limited in-memory store so a retry does not duplicate
 playback.
 
