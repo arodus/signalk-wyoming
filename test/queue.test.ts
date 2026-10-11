@@ -38,7 +38,7 @@ function makePlayer() {
     play: vi.fn((i: AnnouncementItem) => {
       const done = deferred();
       playing.push({ item: i, done });
-      return done.promise;
+      return done.promise.then(() => ({ confirmed: true }));
     }),
     /** Wait until the player has been asked to play `n` items. */
     async until(n: number) {

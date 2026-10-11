@@ -12,7 +12,7 @@
  * so the queue is unit-testable with plain promises and fake timers.
  */
 
-import type { BufferedAudio, Priority } from "./types.js";
+import type { BufferedAudio, PlaybackResult, Priority } from "./types.js";
 
 export interface AnnouncementItem {
   id: string;
@@ -31,10 +31,16 @@ export interface AnnouncementQueueEvent {
   item: AnnouncementItem;
   error?: string;
   reason?: InterruptionReason;
+  /**
+   * play-end only: whether the satellite acknowledged the stream with
+   * `played`. False = streamed to completion but unproven (satellite that
+   * never sends `played`).
+   */
+  confirmed?: boolean;
 }
 
 export interface AnnouncementQueueDeps {
-  play(item: AnnouncementItem): Promise<void>;
+  play(item: AnnouncementItem): Promise<PlaybackResult>;
   /** Cancel the in-flight play (RemoteSatellite.cancelPlayback). */
   cancelPlayback(): void;
   /**
@@ -168,7 +174,7 @@ export class AnnouncementQueue {
         this.current = item;
         this.deps.onEvent?.({ type: "play-start", item });
         try {
-          await this.deps.play(item);
+          const result = await this.deps.play(item);
           const interrupted =
             this.interruption?.id === item.id ? this.interruption : null;
           if (interrupted)
@@ -177,7 +183,12 @@ export class AnnouncementQueue {
               item,
               reason: interrupted.reason,
             });
-          else this.deps.onEvent?.({ type: "play-end", item });
+          else
+            this.deps.onEvent?.({
+              type: "play-end",
+              item,
+              confirmed: result.confirmed,
+            });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           const interrupted =

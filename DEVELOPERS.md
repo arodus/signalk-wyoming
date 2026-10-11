@@ -120,11 +120,13 @@ in a bounded, time-limited in-memory store so a retry does not duplicate
 playback.
 
 The orchestrator promotes a target to `played` only after the satellite sends
-the standard Wyoming `played` event. If confirmation never arrives it closes
-that satellite connection (preventing a late, uncorrelated event from
-acknowledging the next stream) and records `unknown`. This is application-level
-proof from the satellite process, not proof that physical sound left the
-speaker.
+the standard Wyoming `played` event. If confirmation never arrives within the
+audio duration plus a grace period, `play()` resolves `{confirmed: false}` and
+the target records `unknown` — the connection stays up, since satellites before
+wyoming-satellite 1.4.1 never send `played` at all. A cancelled stream waits
+only for the buffered lead it already sent (plus grace), so a late `played`
+from it cannot acknowledge the next stream. This is application-level proof
+from the satellite process, not proof that physical sound left the speaker.
 
 ## Config panel build
 

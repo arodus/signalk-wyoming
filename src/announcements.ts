@@ -389,7 +389,15 @@ export class AnnouncementService {
       target.state = "playing";
       target.startedAt = at;
     } else if (event.type === "play-end") {
-      target.state = "played";
+      // Only Wyoming's `played` ack proves playback. A stream that closed
+      // without it (satellites before 1.4.1 never send one) is unknown, not
+      // played and not failed.
+      if (event.confirmed === false) {
+        target.state = "unknown";
+        target.error = "satellite did not confirm playback with played";
+      } else {
+        target.state = "played";
+      }
       target.finishedAt = at;
     } else if (event.type === "play-error") {
       target.state =

@@ -7,12 +7,19 @@
   bounded idempotency keys.
 - Built-in notification sounds plus persistent custom PCM WAV upload and
   deletion APIs. Sound playback does not require Piper.
+- Notification-sound management in the Test webapp, including target
+  selection, tracked per-satellite playback results, and custom WAV upload and
+  deletion.
 
 ## Changed
 
 - Satellite playback succeeds only after a Wyoming `played` acknowledgement.
-  Missing confirmation now produces an `unknown` result and resets the
-  connection instead of treating elapsed time as proof.
+  Missing confirmation now produces an `unknown` result instead of treating
+  elapsed time as proof. Satellites that never send `played` (wyoming-satellite
+  before 1.4.1, other implementations) keep working; their results read
+  `unknown`. Per-target delivery transitions are published on a new
+  `delivery` SSE event kind; the `announcement` kind keeps its one-per-request
+  shape.
 - The existing version-1 `say()` API remains enqueue-based and compatible.
 - Pulse-socket mode now selects the PulseAudio input/output devices by default
   and no longer forwards ALSA-only `/dev/snd` access into the container.
