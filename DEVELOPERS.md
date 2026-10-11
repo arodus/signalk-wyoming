@@ -55,6 +55,13 @@ the sibling service plugins as **devDependencies** for their protocol tests
 
 ## The in-process `say()` API
 
+> **Deprecated in a future release.** `say()` (this property, `/api/say`
+> and the `voice.say` PUT) predates the announcement API and runs on its own
+> code path in `src/say.ts`, so its announcements are not delivery-tracked.
+> New code should use the [delivery-aware announcement
+> API](#the-delivery-aware-announcement-api) with
+> `content: {kind: "speech", text}`. See `TODO.md` for the migration plan.
+
 The same `say()` behind REST and PUT is published in-process via
 PropertyValues (SPEC §4.2.3) — an anchor-alarm or notification-bridge
 plugin makes the boat speak with no HTTP round-trip:

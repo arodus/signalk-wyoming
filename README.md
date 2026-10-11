@@ -152,6 +152,15 @@ Wyoming add-on, can stand in for any of them (`asr` 10300, `tts` 10200,
 
 ### Announcements — three ways in
 
+> **Deprecation notice.** `say()` — the REST `/api/say` route, the
+> `voice.say` PUT and the in-process `signalk-wyoming.api` property — is the
+> original speech-only API. It will be deprecated in a future release and
+> later removed. New integrations should use the announcement API below
+> (`/api/announcements`, `voice.announce`,
+> `signalk-wyoming.announcements.api`), which handles speech and sounds
+> alike and reports per-satellite delivery. Existing `say()` callers keep
+> working until then.
+
 - **REST**: `POST /plugins/signalk-wyoming/api/say` with
   `{text, targets?, voice?, priority?}` (see the curl example above).
 - **Signal K PUT** to `voice.say` — a plain string or the same options
@@ -225,7 +234,7 @@ Under `vessels.self`:
 | `voice.command`                   | `{id, text, satellite, language, wakeWord?, durationMs?}` | one delta per utterance; `$source` = `signalk-wyoming.<satelliteId>`                                  |
 | `voice.satellites.<id>.connected` | `boolean`                                                 |                                                                                                       |
 | `voice.satellites.<id>.state`     | `idle \| listening \| transcribing \| speaking`           |                                                                                                       |
-| `voice.say`                       | write-only PUT target                                     | value: a plain string or the `say()` options object                                                   |
+| `voice.say`                       | write-only PUT target                                     | value: a plain string or the `say()` options object. _Deprecated — use `voice.announce`._             |
 | `voice.announce`                  | write-only PUT target                                     | value: a sound id, `{soundId \| text, targets?, priority?, requestId?}` or a full request             |
 | `voice.muted`                     | `boolean`, PUT-able                                       | `true` suppresses `normal` announcements; `urgent` plays through. Defaults to `false`; not persisted. |
 
@@ -239,29 +248,29 @@ All routes under `/plugins/signalk-wyoming`; they respect Signal K access
 control (read access for GETs, write for POSTs; image-update routes are
 admin-only).
 
-| Method & path                                      | Body / result                                                                                                            |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `POST /api/say`                                    | `{text, targets?, voice?, priority?}` → `200` `{ok, queued, errors?, suppressed?}`; `503` when nothing could be queued   |
-| `POST /api/announcements`                          | `{content: {kind: speech \| sound, …}, requestId?, targets?, priority?}` → `202` tracked snapshot                        |
-| `GET /api/announcements/:id`                       | current aggregate and per-satellite delivery state                                                                       |
-| `DELETE /api/announcements/:id`                    | cancel queued or in-progress playback                                                                                    |
-| `GET /api/sounds`                                  | built-in and uploaded sound metadata                                                                                     |
-| `POST /api/sounds`                                 | `{id, wavBase64}` uploads a bounded PCM WAV                                                                              |
-| `DELETE /api/sounds/:id`                           | delete an uploaded sound; built-ins are read-only                                                                        |
-| `GET /api/satellites`                              | `[{id, name, connected, state, host, port, hasControlApi, queueDepth}]`                                                  |
-| `GET /api/services`                                | `{asr, tts, wake}` → each `{uri, status, source, plugin?}`; `wake` gains `models` (available wake-word names) when ready |
-| `GET /api/voices`                                  | piper voices `[{name, languages, description}]`; `503` until TTS is available                                            |
-| `POST /api/satellites/:id/test`                    | queue a test tone → `200`                                                                                                |
-| `GET /api/satellites/:id/devices`                  | audio devices `{capture: [{card, device, id, name}], playback: [...]}` (`404` if the satellite has no control API)       |
-| `POST /api/satellites/:id/record`                  | `{seconds?}` (1–10) → `audio/wav` (briefly pauses the satellite)                                                         |
-| `POST /api/satellites/:id/play`                    | `{type: 'tone', frequency?, durationMs?}` or `{type: 'wav', data: base64}`                                               |
-| `GET /api/satellites/:id/vu`                       | SSE stream of `{rms, peak}` mic levels                                                                                   |
-| `POST /api/transcribe`                             | `{satellite, seconds?}` (1–10 s) → record → whisper → `{text, latencyMs}`; `503` until STT is available                  |
-| `POST /api/mute`                                   | `{muted: boolean}` → `{muted}` (same switch as the `voice.muted` PUT)                                                    |
-| `GET /api/log`                                     | recent events `[{at, kind, data}]`                                                                                       |
-| `GET /api/events`                                  | SSE: `state`, `command`, `announcement`, `delivery`, `detection`, `service`, `error`                                     |
-| `GET /api/versions`                                | local-satellite image versions `{versions: [{tag, prerelease?}]}` (works while the plugin is disabled)                   |
-| `GET /api/update/check` / `POST /api/update/apply` | local-satellite image updates (admin)                                                                                    |
+| Method & path                                      | Body / result                                                                                                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/say`                                    | `{text, targets?, voice?, priority?}` → `200` `{ok, queued, errors?, suppressed?}`; `503` when nothing could be queued. _Deprecated — use `/api/announcements`._ |
+| `POST /api/announcements`                          | `{content: {kind: speech \| sound, …}, requestId?, targets?, priority?}` → `202` tracked snapshot                                                                |
+| `GET /api/announcements/:id`                       | current aggregate and per-satellite delivery state                                                                                                               |
+| `DELETE /api/announcements/:id`                    | cancel queued or in-progress playback                                                                                                                            |
+| `GET /api/sounds`                                  | built-in and uploaded sound metadata                                                                                                                             |
+| `POST /api/sounds`                                 | `{id, wavBase64}` uploads a bounded PCM WAV                                                                                                                      |
+| `DELETE /api/sounds/:id`                           | delete an uploaded sound; built-ins are read-only                                                                                                                |
+| `GET /api/satellites`                              | `[{id, name, connected, state, host, port, hasControlApi, queueDepth}]`                                                                                          |
+| `GET /api/services`                                | `{asr, tts, wake}` → each `{uri, status, source, plugin?}`; `wake` gains `models` (available wake-word names) when ready                                         |
+| `GET /api/voices`                                  | piper voices `[{name, languages, description}]`; `503` until TTS is available                                                                                    |
+| `POST /api/satellites/:id/test`                    | queue a test tone → `200`                                                                                                                                        |
+| `GET /api/satellites/:id/devices`                  | audio devices `{capture: [{card, device, id, name}], playback: [...]}` (`404` if the satellite has no control API)                                               |
+| `POST /api/satellites/:id/record`                  | `{seconds?}` (1–10) → `audio/wav` (briefly pauses the satellite)                                                                                                 |
+| `POST /api/satellites/:id/play`                    | `{type: 'tone', frequency?, durationMs?}` or `{type: 'wav', data: base64}`                                                                                       |
+| `GET /api/satellites/:id/vu`                       | SSE stream of `{rms, peak}` mic levels                                                                                                                           |
+| `POST /api/transcribe`                             | `{satellite, seconds?}` (1–10 s) → record → whisper → `{text, latencyMs}`; `503` until STT is available                                                          |
+| `POST /api/mute`                                   | `{muted: boolean}` → `{muted}` (same switch as the `voice.muted` PUT)                                                                                            |
+| `GET /api/log`                                     | recent events `[{at, kind, data}]`                                                                                                                               |
+| `GET /api/events`                                  | SSE: `state`, `command`, `announcement`, `delivery`, `detection`, `service`, `error`                                                                             |
+| `GET /api/versions`                                | local-satellite image versions `{versions: [{tag, prerelease?}]}` (works while the plugin is disabled)                                                           |
+| `GET /api/update/check` / `POST /api/update/apply` | local-satellite image updates (admin)                                                                                                                            |
 
 `say()` semantics (all three surfaces): the call succeeds when the
 announcement is **queued**, not when it finishes playing; partial failure

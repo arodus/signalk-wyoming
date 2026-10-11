@@ -14,6 +14,15 @@
   Takes a sound id, `{soundId | text, targets?, priority?, requestId?}` or a
   full announcement request.
 
+## Deprecated
+
+- The version-1 `say()` API — `POST /api/say`, the `voice.say` PUT and the
+  in-process `signalk-wyoming.api` property — will be deprecated in a future
+  release and removed later. It still works unchanged. Use the announcement
+  API (`POST /api/announcements`, `voice.announce`,
+  `signalk-wyoming.announcements.api`) with `content: {kind: "speech", text}`
+  for speech and `{kind: "sound", soundId}` for sounds.
+
 ## Changed
 
 - Satellite playback succeeds only after a Wyoming `played` acknowledgement.
